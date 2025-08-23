@@ -31,14 +31,14 @@ idx = 1:n;
 Mu = sparse(idx,U,1,n,k_max,n);
 Mv = sparse(idx,V,1,n,k_max,n); 
 Puv = nonzeros(Mu'*Mv/n);   % Joint distribution of U and V.
-Huv = -dot(Puv,log2(Puv));  % Joint Entropy of U and V
+Huv = -dot(Puv,log(Puv));   % Joint Entropy of U and V
 
 Pu = nonzeros(mean(Mu,1));  % Distribution of U
 Pv = nonzeros(mean(Mv,1));  % Distribution of V
 
 % Calculate Entropy of U and V:
-Hu = -dot(Pu,log2(Pu));
-Hv = -dot(Pv,log2(Pv));
+Hu = -dot(Pu,log(Pu));
+Hv = -dot(Pv,log(Pv));
 
 % Calculate MI between U and V
 MI = Hu + Hv - Huv;

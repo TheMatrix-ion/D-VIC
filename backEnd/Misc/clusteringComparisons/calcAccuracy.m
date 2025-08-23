@@ -53,6 +53,107 @@ end
 
 function [OA, kappa, NMI, AMI, ARI, FMI, purity] = evaluatePerformances(Y,C, ignore1flag)
     if ignore1flag
+
+        mask = Y>1;
+        Y = Y(mask);
+        C = C(mask);
+        Y = Y-1; % remove unlabeled class so classes start at 1 after shift
+    end
+
+    % Standardize labels to start at zero
+    Y = Y - min(Y);
+    C = C - min(C);
+
+    l1 = unique(Y)';
+    l2 = unique(C)';
+    ind = 1;
+    if numel(l1) ~= numel(l2)
+        for i = l1
+            if ~ismember(i,l2)
+                C(ind) = i;
+                ind = ind + 1;
+            end
+        end
+        l2 = unique(C)';
+        if numel(l1) ~= numel(l2)
+            error('calcAccuracy: number of clusters does not match');
+        end
+    end
+
+    % Convert back to 1-based indexing for MATLAB functions
+    Y = Y + 1;
+    C = C + 1;
+
+    % Align predicted labels with ground truth using Hungarian algorithm
+    C = alignClusterings(Y,C);
+
+    % Performance calculations
+    confMat = confusionmat(Y,C);
+    labelsTrue = Y;
+
+    n = sum(confMat(:));
+    OA = sum(diag(confMat))/n;
+
+    p = nansum(confMat,2)'*nansum(confMat)'/(n^2);
+    kappa = (OA - p)/(1 - p);
+
+    labelsPred = C;
+    [NMI, MI, Hu, Hv] = nmi(labelsTrue, labelsPred);
+    EMI = expectedMutualInformation(confMat, n);
+    denom = ((Hu + Hv)/2) - EMI;
+    if denom == 0
+        AMI = 0;
+    else
+        AMI = (MI - EMI)/denom;
+    end
+
+    a = sum(confMat,2);
+    b = sum(confMat,1);
+    tp = sum(sum(confMat.*(confMat-1)/2));
+    sumA = sum(a.*(a-1)/2);
+    sumB = sum(b.*(b-1)/2);
+    fp = sumB - tp;
+    fn = sumA - tp;
+    denomARI = (0.5*(sumA + sumB) - (sumA*sumB)/(n*(n-1)/2));
+    if denomARI == 0
+        ARI = 0;
+    else
+        ARI = (tp - (sumA*sumB)/(n*(n-1)/2)) / denomARI;
+    end
+
+    denomFMI = sqrt((tp+fp)*(tp+fn));
+    if denomFMI == 0
+        FMI = 0;
+    else
+        FMI = tp / denomFMI;
+    end
+
+    purity = sum(max(confMat,[],1))/n;
+
+end
+
+function EMI = expectedMutualInformation(confMat, n)
+    a = sum(confMat,2);
+    b = sum(confMat,1);
+    EMI = 0;
+    for i = 1:length(a)
+        for j = 1:length(b)
+            maxnij = max(1, a(i) + b(j) - n);
+            minnij = min(a(i), b(j));
+            if maxnij > minnij
+                continue;
+            end
+            for nij = maxnij:minnij
+                term1 = (nij/n) * log((n*nij)/(a(i)*b(j)));
+                logTerm2 = gammaln(a(i)+1) - gammaln(nij+1) - gammaln(a(i)-nij+1) + ...
+                           gammaln(n-a(i)+1) - gammaln(b(j)-nij+1) - gammaln(n-a(i)-b(j)+nij+1) - ...
+                           (gammaln(n+1) - gammaln(b(j)+1) - gammaln(n-b(j)+1));
+                term2 = exp(logTerm2);
+                EMI = EMI + term1*term2;
+            end
+        end
+    end
+
         % If true, we restric performance evaluation to unlabeled points (those
         % marked as index 1).
 
@@ -151,4 +252,5 @@ function EMI = expectedMutualInformation(confMat, n)
             end
         end
     end
+
 end
